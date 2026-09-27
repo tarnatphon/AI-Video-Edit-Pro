@@ -3,8 +3,76 @@
  * Everything here is a no-op stand-in; behaviour is asserted through the store, not pixels.
  */
 
+type StorageName = 'localStorage' | 'sessionStorage';
+
+function isStorage(value: unknown): value is Storage {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Storage).getItem === 'function' &&
+    typeof (value as Storage).setItem === 'function' &&
+    typeof (value as Storage).clear === 'function'
+  );
+}
+
+/** Spec-shaped in-memory Storage used when neither jsdom nor the runtime provides a working one. */
+function createMemoryStorage(): Storage {
+  const map = new Map<string, string>();
+  const storage: Storage = {
+    get length() {
+      return map.size;
+    },
+    key: (index: number) => Array.from(map.keys())[index] ?? null,
+    getItem: (key: string) => map.get(String(key)) ?? null,
+    setItem: (key: string, value: string) => {
+      map.set(String(key), String(value));
+    },
+    removeItem: (key: string) => {
+      map.delete(String(key));
+    },
+    clear: () => map.clear(),
+  };
+  return storage;
+}
+
+/**
+ * Resolve a usable Web Storage object for the given global name.
+ *
+ * Node ≥ 22 (with --experimental-webstorage) and Node ≥ 25 (by default) define their own global
+ * `localStorage` accessor. Without `--localstorage-file` it throws (Node 22) or returns `undefined`
+ * (Node 25+), and because the global already exists vitest's jsdom environment does not replace it.
+ * vitest also rewrites `document.defaultView` to point at the Node global, so the real jsdom window
+ * has to be reached through `globalThis.jsdom` instead.
+ */
+function resolveStorage(name: StorageName): Storage {
+  const jsdomWindow = (globalThis as { jsdom?: { window?: Partial<Record<StorageName, unknown>> } }).jsdom?.window;
+  try {
+    const fromJsdom = jsdomWindow?.[name];
+    if (isStorage(fromJsdom)) return fromJsdom;
+  } catch {
+    // jsdom throws for opaque origins — fall through.
+  }
+  try {
+    const current = (globalThis as Partial<Record<StorageName, unknown>>)[name];
+    if (isStorage(current)) return current;
+  } catch {
+    // Node 22 throws when the storage file is not configured — fall through.
+  }
+  return createMemoryStorage();
+}
+
 export function installBrowserMocks(options: { desktop?: boolean } = {}): void {
   const desktop = options.desktop ?? true;
+
+  // Web Storage — always bind a working Storage object to the global (see resolveStorage).
+  for (const name of ['localStorage', 'sessionStorage'] as const) {
+    Object.defineProperty(globalThis, name, {
+      configurable: true,
+      enumerable: true,
+      writable: true,
+      value: resolveStorage(name),
+    });
+  }
 
   // matchMedia — drive the responsive layout.
   Object.defineProperty(window, 'matchMedia', {

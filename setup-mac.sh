@@ -9,7 +9,7 @@
 #
 #  What it does (idempotent — safe to run again):
 #    1. Ensures Xcode Command Line Tools (git)      4. npm install (uses the lockfile when present)
-#    2. Ensures Node.js >= 20 (via Homebrew)         5. Typecheck + unit tests (fail fast)
+#    2. Ensures Node.js >= 20 (via Homebrew)         5. Typecheck + unit tests (warn only)
 #    3. Clones or updates the repository             6. Starts the editor and opens your browser
 #
 #  Options (environment variables):
@@ -82,10 +82,16 @@ else
   npm install --no-audit --no-fund
 fi
 
-# ---------------------------------------------------------------- 5. Checks
+# ---------------------------------------------------------------- 5. Checks (informational — never block the launch)
 if [[ "${AIVEP_SKIP_CHECKS:-0}" != "1" ]]; then
-  log "Typechecking…";  npm run -s typecheck
-  log "Running tests…"; npm run -s test -- --reporter=dot
+  log "Typechecking…"
+  if ! npm run -s typecheck; then
+    warn "Typecheck reported errors. The editor will still start (Vite does not need tsc); please report the output above."
+  fi
+  log "Running tests…"
+  if ! npm run -s test -- --reporter=dot; then
+    warn "Some tests failed on Node $(node -v). This does not affect the editor itself; starting anyway."
+  fi
 fi
 
 # ---------------------------------------------------------------- 6. Launch

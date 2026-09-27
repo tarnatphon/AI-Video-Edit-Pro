@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/tarnatphon/AI-Video-Edit-Pro/main/s
 ```
 
 สคริปต์จะติดตั้ง Xcode CLT / Node.js (ถ้ายังไม่มี), clone โปรเจกต์ไปที่ `~/AI-Video-Edit-Pro`, ติดตั้ง dependencies,
-รัน typecheck + unit tests, แล้วเปิดโปรแกรมที่ `http://localhost:5173` ให้อัตโนมัติ (รันซ้ำได้ ปลอดภัย)
+รัน typecheck + unit tests (เตือนอย่างเดียว ไม่ขวางการเปิดโปรแกรม), แล้วเปิดโปรแกรมที่ `http://localhost:5173` ให้อัตโนมัติ (รันซ้ำได้ ปลอดภัย)
 
 ตัวเลือกเพิ่มเติม:
 
@@ -39,6 +39,16 @@ npm run build        # production build + PWA service worker → dist/
 1. รัน `npm run dev` (หรือ `AIVEP_HTTPS=1 bash setup-mac.sh`) บน Mac — Terminal จะแสดง URL แบบ `http://192.168.x.x:5173`
 2. เปิด URL นั้นบน Safari / Chrome ของแท็บเล็ตที่อยู่ Wi-Fi เดียวกัน
 3. กด **Share → Add to Home Screen** เพื่อติดตั้งเป็นแอป (PWA) แบบเต็มจอ
+
+### แก้ปัญหาที่พบบ่อย (Troubleshooting)
+
+| อาการ | สาเหตุ / วิธีแก้ |
+| --- | --- |
+| `npm warn allow-scripts … esbuild / fsevents` | npm ≥ 11.6 บล็อก install script ของ dependency โดยปริยาย — โปรเจกต์อนุมัติสองตัวนี้ไว้ใน `package.json` (`allowScripts`) แล้ว ถ้ายังเห็นคำเตือนก็ไม่มีผลต่อการทำงาน |
+| tests ล้มเหลวเรื่อง `localStorage` (Node ≥ 25) | Node 25+ มี global `localStorage` ของตัวเองซึ่งเป็น `undefined` ถ้าไม่ใส่ `--localstorage-file` — test setup ของโปรเจกต์ผูก Storage ของ jsdom ให้เองแล้ว (แก้แล้ว) และ `setup-mac.sh` จะไม่หยุดทำงานเพราะ test อีกต่อไป |
+| พอร์ต 5173 ถูกใช้อยู่ | Vite จะเลื่อนไปพอร์ตถัดไปเองและพิมพ์ URL ใหม่ใน Terminal |
+| iPad/Android เปิดได้แต่ไฟล์หายหลังปิดแท็บ | OPFS ต้องการ secure context — รันด้วย `AIVEP_HTTPS=1 bash setup-mac.sh` (หรือ `npm run dev:https`) แล้วยอมรับใบรับรอง self-signed บนแท็บเล็ต |
+| ต้องการรันโดยไม่ตรวจสอบ | `AIVEP_SKIP_CHECKS=1 bash setup-mac.sh` ข้าม typecheck/tests เพื่อเปิดโปรแกรมทันที |
 
 ---
 

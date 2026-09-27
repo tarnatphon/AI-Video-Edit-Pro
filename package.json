@@ -7,6 +7,10 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "allowScripts": {
+    "esbuild": true,
+    "fsevents": true
+  },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:https": "VITE_HTTPS=1 vite --host 0.0.0.0",
