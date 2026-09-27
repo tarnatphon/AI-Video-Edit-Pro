@@ -1,0 +1,101 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-panel: #121214;
+  --color-panel-2: #18181b;
+  --color-line: #27272a;
+  --color-accent: #6366f1;
+  --color-accent-2: #ec4899;
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Thai', 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: #0a0a0a;
+  color: #f4f4f5;
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+/* Native-ish controls on dark UI */
+input[type='range'] {
+  accent-color: #6366f1;
+  width: 100%;
+  height: 28px; /* comfortable touch target */
+  background: transparent;
+  touch-action: none;
+}
+
+input[type='color'] {
+  padding: 0;
+  border: 0;
+  width: 32px;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+}
+
+select,
+input[type='text'],
+input[type='number'],
+textarea {
+  color-scheme: dark;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}
+.thin-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 8px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Timeline pieces */
+.timeline-scroller {
+  touch-action: none; /* we implement pan + pinch ourselves for deterministic behaviour */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.clip-handle {
+  cursor: ew-resize;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.animate-pulse-soft {
+  animation: pulse-soft 1.4s ease-in-out infinite;
+}
