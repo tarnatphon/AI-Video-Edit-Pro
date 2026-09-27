@@ -24,9 +24,17 @@ curl -fsSL https://raw.githubusercontent.com/tarnatphon/AI-Video-Edit-Pro/main/s
 AIVEP_BRANCH=main AIVEP_DIR=~/Code/AI-Video-Edit-Pro AIVEP_HTTPS=1 bash setup-mac.sh
 ```
 
+อัปเดตโค้ดในเครื่องให้ตรงกับ GitHub (`main`) แล้วเปิดโปรแกรม — รันสคริปต์เดิมจากในโฟลเดอร์ได้เลย
+(สคริปต์จะ `git pull` ให้เมื่อไม่มีไฟล์ที่แก้ค้างไว้ และไม่ทำลายงานที่ยังไม่ได้ commit):
+
+```bash
+cd ~/AI-Video-Edit-Pro && bash setup-mac.sh
+```
+
 ถ้ามีโค้ดอยู่แล้ว (ทุก OS):
 
 ```bash
+git pull --ff-only    # ดึงโค้ดล่าสุดจาก GitHub
 npm install
 npm run dev          # http://localhost:5173  (เปิดจากเครื่องอื่นใน Wi-Fi เดียวกันได้ผ่าน IP ของเครื่อง)
 npm run dev:https    # https แบบ self-signed สำหรับทดสอบบน iPad / Android

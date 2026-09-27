@@ -10,11 +10,11 @@
 #  What it does (idempotent — safe to run again):
 #    1. Ensures Xcode Command Line Tools (git)      4. npm install (uses the lockfile when present)
 #    2. Ensures Node.js >= 20 (via Homebrew)         5. Typecheck + unit tests (warn only)
-#    3. Clones or updates the repository             6. Starts the editor and opens your browser
+#    3. Clones the repository, or syncs it with GitHub  6. Starts the editor and opens your browser
 #
 #  Options (environment variables):
 #    AIVEP_DIR=~/Code/AI-Video-Edit-Pro   install location (default: ~/AI-Video-Edit-Pro)
-#    AIVEP_BRANCH=main                    git branch to check out
+#    AIVEP_BRANCH=main                    git branch to check out (existing checkouts stay on their branch unless set)
 #    AIVEP_HTTPS=1                        serve over https (self-signed) so iPad/Android get OPFS + full APIs
 #    AIVEP_NO_OPEN=1                      do not auto-open the browser
 #    AIVEP_SKIP_CHECKS=1                  skip typecheck/tests for a faster start
@@ -59,15 +59,37 @@ fi
 log "Node $(node -v) · npm $(npm -v)"
 
 # ---------------------------------------------------------------- 3. Source code
+# Sync an existing checkout with GitHub. Never destructive: local edits or a diverged branch only
+# produce a warning and the code already on disk is used.
+update_checkout() {
+  local dir="$1" current target
+  if ! git -C "$dir" fetch --quiet --prune origin; then
+    warn "Could not reach GitHub — using the code already in $dir."
+    return 0
+  fi
+  if [[ -n "$(git -C "$dir" status --porcelain --untracked-files=no)" ]]; then
+    warn "Uncommitted changes in $dir — skipping the update. Commit or 'git stash' them to sync."
+    return 0
+  fi
+  current="$(git -C "$dir" rev-parse --abbrev-ref HEAD)"
+  target="${AIVEP_BRANCH:-$current}"                 # explicit branch wins, otherwise stay where you are
+  [[ "$target" == "HEAD" ]] && target="$BRANCH"      # detached HEAD → default branch
+  if [[ "$target" != "$current" ]]; then
+    log "Switching $dir to branch '$target'…"
+    git -C "$dir" checkout --quiet "$target" || fail "Branch '$target' does not exist on origin."
+  fi
+  log "Updating $dir ($target)…"
+  git -C "$dir" pull --ff-only --quiet origin "$target" ||
+    warn "Branch '$target' has diverged from origin — left untouched. Run 'git status' in $dir to resolve."
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/package.json" && -d "$SCRIPT_DIR/src/engine" ]]; then
   DIR="$SCRIPT_DIR"
   log "Using existing checkout: $DIR"
-elif [[ -d "$DIR/.git" ]]; then
-  log "Updating $DIR ($BRANCH)…"
-  git -C "$DIR" fetch --quiet origin
-  git -C "$DIR" checkout --quiet "$BRANCH"
-  git -C "$DIR" pull --ff-only --quiet origin "$BRANCH"
+fi
+if [[ -d "$DIR/.git" ]]; then
+  update_checkout "$DIR"
 else
   log "Cloning into $DIR ($BRANCH)…"
   git clone --quiet --branch "$BRANCH" "$REPO_URL" "$DIR"
