@@ -126,6 +126,14 @@ export const TimelineClip = memo(function TimelineClip({ clip, asset, selected, 
   const fadeOutPx = clip.fadeOut * pxPerFrame;
   const showWave = (clip.kind === 'audio' || clip.kind === 'video') && asset?.waveform && asset.waveform.length > 0;
 
+  // Transition widths
+  const transInPx = clip.transitionIn && clip.transitionIn.type !== 'none'
+    ? Math.min(width * 0.45, (clip.transitionIn.duration || 15) * pxPerFrame)
+    : 0;
+  const transOutPx = clip.transitionOut && clip.transitionOut.type !== 'none'
+    ? Math.min(width * 0.45, (clip.transitionOut.duration || 15) * pxPerFrame)
+    : 0;
+
   return (
     <div
       role="button"
@@ -167,6 +175,26 @@ export const TimelineClip = memo(function TimelineClip({ clip, asset, selected, 
             height={clip.kind === 'video' ? 24 : 44}
             color={style.wave}
           />
+        </div>
+      )}
+
+      {/* Visual Transition In badge */}
+      {transInPx > 0 && (
+        <div
+          className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-purple-500/30 border-r border-purple-400 px-1 text-[9px] font-bold text-purple-200"
+          style={{ width: transInPx }}
+        >
+          <span className="truncate">⚡ {clip.transitionIn?.type}</span>
+        </div>
+      )}
+
+      {/* Visual Transition Out badge */}
+      {transOutPx > 0 && (
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center justify-end bg-purple-500/30 border-l border-purple-400 px-1 text-[9px] font-bold text-purple-200"
+          style={{ width: transOutPx }}
+        >
+          <span className="truncate">{clip.transitionOut?.type} ⚡</span>
         </div>
       )}
 

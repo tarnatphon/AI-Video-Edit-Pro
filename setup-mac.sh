@@ -8,12 +8,12 @@
 #    bash setup-mac.sh
 #
 #  What it does (idempotent — safe to run again):
-#    1. Ensures Xcode Command Line Tools (git)      4. npm install (uses the lockfile when present)
+#    1. Ensures Xcode Command Line Tools (git)      4. npm install (uses lockfile when present)
 #    2. Ensures Node.js >= 20 (via Homebrew)         5. Typecheck + unit tests (warn only)
-#    3. Clones the repository, or syncs it with GitHub  6. Starts the editor and opens your browser
+#    3. Clones/syncs repository & remembers path    6. Starts the editor and opens your browser
 #
 #  Options (environment variables):
-#    AIVEP_DIR=~/Code/AI-Video-Edit-Pro   install location (default: ~/AI-Video-Edit-Pro)
+#    AIVEP_DIR=~/Code/AI-Video-Edit-Pro   install location (highest priority; default: remembered or ~/AI-Video-Edit-Pro)
 #    AIVEP_BRANCH=main                    git branch to check out (existing checkouts stay on their branch unless set)
 #    AIVEP_HTTPS=1                        serve over https (self-signed) so iPad/Android get OPFS + full APIs
 #    AIVEP_NO_OPEN=1                      do not auto-open the browser
@@ -23,15 +23,105 @@ set -euo pipefail
 
 REPO_URL="https://github.com/tarnatphon/AI-Video-Edit-Pro.git"
 BRANCH="${AIVEP_BRANCH:-main}"
-DIR="${AIVEP_DIR:-$HOME/AI-Video-Edit-Pro}"
 MIN_NODE=20
 PORT=5173
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/aivep"
+LAST_DIR_FILE="$CONFIG_DIR/last_dir"
 
 log()  { printf '\033[1;35m[AI Video Edit Pro]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
 fail() { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ "$(uname -s)" == "Darwin" ]] || warn "This script targets macOS; continuing anyway."
+
+# ---------------------------------------------------------------- Path resolution & memory
+# Priority:
+#  1. Explicit AIVEP_DIR environment variable (always wins)
+#  2. Current directory if running from inside an existing checkout
+#  3. Remembered last-used path from previous runs
+#  4. Default path (~/AI-Video-Edit-Pro)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+
+if [[ -n "${AIVEP_DIR:-}" ]]; then
+  # Expand leading tilde if present
+  DIR="${AIVEP_DIR/#\~/$HOME}"
+  log "Using specified AIVEP_DIR: $DIR"
+elif [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/package.json" && -d "$SCRIPT_DIR/src/engine" ]]; then
+  DIR="$SCRIPT_DIR"
+  log "Using current checkout: $DIR"
+elif [[ -f "$LAST_DIR_FILE" ]] && [[ -n "$(cat "$LAST_DIR_FILE" 2>/dev/null | tr -d '\r\n')" ]]; then
+  SAVED_DIR="$(cat "$LAST_DIR_FILE" 2>/dev/null | tr -d '\r\n')"
+  SAVED_DIR="${SAVED_DIR/#\~/$HOME}"
+  if [[ -d "$SAVED_DIR" || "$SAVED_DIR" == /Volumes/* ]]; then
+    DIR="$SAVED_DIR"
+    log "Using remembered directory: $DIR"
+  else
+    DIR="$HOME/AI-Video-Edit-Pro"
+    log "Remembered path not found ($SAVED_DIR); defaulting to: $DIR"
+  fi
+else
+  DIR="$HOME/AI-Video-Edit-Pro"
+  log "Using default directory: $DIR"
+fi
+
+# Save remembered path for subsequent runs
+save_last_dir() {
+  local target="$1"
+  mkdir -p "$CONFIG_DIR" 2>/dev/null || true
+  printf '%s\n' "$target" > "$LAST_DIR_FILE" 2>/dev/null || true
+}
+
+# Volume mount & filesystem check
+check_filesystem() {
+  local target="$1"
+  local check_path="$target"
+
+  # Find the lowest existing ancestor directory
+  while [[ ! -d "$check_path" && "$check_path" != "/" && "$check_path" != "." ]]; do
+    check_path="$(dirname "$check_path")"
+  done
+
+  # Check if under /Volumes/... and verify volume is mounted
+  if [[ "$target" == /Volumes/* ]]; then
+    local vol_name
+    vol_name="$(printf '%s\n' "$target" | cut -d'/' -f3)"
+    local vol_path="/Volumes/$vol_name"
+    if [[ ! -d "$vol_path" ]]; then
+      fail "External drive volume '$vol_path' is not mounted. Please connect the drive and try again."
+    fi
+  fi
+
+  # macOS Filesystem check (APFS / HFS+)
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v diskutil >/dev/null 2>&1; then
+    local fs_info fs_type
+    fs_info="$(diskutil info "$check_path" 2>/dev/null || true)"
+    fs_type="$(printf '%s\n' "$fs_info" | grep -E "Type \(Bundle\):|File System Personality:" | head -n 1 | awk -F: '{print $2}' | xargs || true)"
+    
+    # Fallback to stat if diskutil didn't report personality
+    if [[ -z "$fs_type" ]] && command -v stat >/dev/null 2>&1; then
+      fs_type="$(stat -f "%HT" "$check_path" 2>/dev/null || stat -f "%T" "$check_path" 2>/dev/null || true)"
+    fi
+
+    if [[ -n "$fs_type" ]]; then
+      case "$fs_type" in
+        *apfs*|*APFS*)
+          log "Filesystem verified: APFS ($check_path)"
+          ;;
+        *hfs*|*HFS*|*Journaled*)
+          log "Filesystem verified: Apple HFS+ ($check_path)"
+          ;;
+        *exfat*|*ExFAT*|*msdos*|*FAT*|*ntfs*|*NTFS*)
+          warn "Directory is on an ${fs_type} volume ($check_path). APFS is strongly recommended on macOS for optimal performance and atomic file locks."
+          ;;
+        *)
+          log "Filesystem: ${fs_type} ($check_path)"
+          ;;
+      esac
+    fi
+  fi
+}
 
 # ---------------------------------------------------------------- 1. Xcode Command Line Tools (git)
 if ! xcode-select -p >/dev/null 2>&1; then
@@ -59,6 +149,8 @@ fi
 log "Node $(node -v) · npm $(npm -v)"
 
 # ---------------------------------------------------------------- 3. Source code
+check_filesystem "$DIR"
+
 # Sync an existing checkout with GitHub. Never destructive: local edits or a diverged branch only
 # produce a warning and the code already on disk is used.
 update_checkout() {
@@ -83,17 +175,15 @@ update_checkout() {
     warn "Branch '$target' has diverged from origin — left untouched. Run 'git status' in $dir to resolve."
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
-if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/package.json" && -d "$SCRIPT_DIR/src/engine" ]]; then
-  DIR="$SCRIPT_DIR"
-  log "Using existing checkout: $DIR"
-fi
 if [[ -d "$DIR/.git" ]]; then
   update_checkout "$DIR"
 else
   log "Cloning into $DIR ($BRANCH)…"
+  mkdir -p "$(dirname "$DIR")"
   git clone --quiet --branch "$BRANCH" "$REPO_URL" "$DIR"
 fi
+
+save_last_dir "$DIR"
 cd "$DIR"
 
 # ---------------------------------------------------------------- 4. Dependencies

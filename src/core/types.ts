@@ -95,6 +95,22 @@ export interface TextStyle {
   background: string | null;
 }
 
+export interface TransitionConfig {
+  type: 'none' | 'crossfade' | 'fadeToBlack' | 'fadeToWhite' | 'wipeLeft' | 'wipeRight' | 'slideLeft' | 'zoomIn';
+  duration: Frames;
+}
+
+export type KeyframeProperty = 'x' | 'y' | 'scale' | 'rotation' | 'opacity';
+export type KeyframeEasing = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+
+export interface Keyframe {
+  id: string;
+  frame: number;
+  property: KeyframeProperty;
+  value: number;
+  easing?: KeyframeEasing | undefined;
+}
+
 export interface Clip {
   id: string;
   trackId: string;
@@ -118,6 +134,9 @@ export interface Clip {
   transform: Transform;
   effects: Effect[];
   text: TextStyle | null;
+  transitionIn?: TransitionConfig | undefined;
+  transitionOut?: TransitionConfig | undefined;
+  keyframes?: Keyframe[] | undefined;
 }
 
 export interface Project {

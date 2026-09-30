@@ -14,13 +14,12 @@
 curl -fsSL https://raw.githubusercontent.com/tarnatphon/AI-Video-Edit-Pro/main/setup-mac.sh | bash
 ```
 
-สคริปต์จะติดตั้ง Xcode CLT / Node.js (ถ้ายังไม่มี), clone โปรเจกต์ไปที่ `~/AI-Video-Edit-Pro`, ติดตั้ง dependencies,
-รัน typecheck + unit tests (เตือนอย่างเดียว ไม่ขวางการเปิดโปรแกรม), แล้วเปิดโปรแกรมที่ `http://localhost:5173` ให้อัตโนมัติ (รันซ้ำได้ ปลอดภัย)
+สคริปต์จะติดตั้ง Xcode CLT / Node.js (ถ้ายังไม่มี), clone โปรเจกต์ไปที่ `~/AI-Video-Edit-Pro` (หรือโฟลเดอร์ล่าสุดที่จำไว้), ตรวจสอบความถูกต้องของไดรฟ์/ระบบไฟล์ APFS, ติดตั้ง dependencies, รัน typecheck + unit tests (เตือนอย่างเดียว ไม่ขวางการเปิดโปรแกรม), แล้วเปิดโปรแกรมที่ `http://localhost:5173` ให้อัตโนมัติ (รันซ้ำได้ ปลอดภัย)
 
 ตัวเลือกเพิ่มเติม:
 
 ```bash
-# ระบุ branch / โฟลเดอร์ / เปิด https (จำเป็นสำหรับ OPFS บน iPad-Android เมื่อเข้าผ่าน Wi-Fi)
+# ระบุ branch / โฟลเดอร์ (AIVEP_DIR มีสิทธิ์สูงสุดเสมอ) / เปิด https (จำเป็นสำหรับ OPFS บน iPad-Android เมื่อเข้าผ่าน Wi-Fi)
 AIVEP_BRANCH=main AIVEP_DIR=~/Code/AI-Video-Edit-Pro AIVEP_HTTPS=1 bash setup-mac.sh
 ```
 
@@ -38,25 +37,15 @@ git pull --ff-only    # ดึงโค้ดล่าสุดจาก GitHub
 npm install
 npm run dev          # http://localhost:5173  (เปิดจากเครื่องอื่นใน Wi-Fi เดียวกันได้ผ่าน IP ของเครื่อง)
 npm run dev:https    # https แบบ self-signed สำหรับทดสอบบน iPad / Android
-npm test             # unit + UI smoke tests (72 tests)
+npm test             # unit + UI smoke tests (105 tests)
 npm run build        # production build + PWA service worker → dist/
 ```
 
-### ทดสอบบน iPad / Android
+### การตั้งค่าและสิทธิ์ของสคริปต์ setup-mac.sh
 
-1. รัน `npm run dev` (หรือ `AIVEP_HTTPS=1 bash setup-mac.sh`) บน Mac — Terminal จะแสดง URL แบบ `http://192.168.x.x:5173`
-2. เปิด URL นั้นบน Safari / Chrome ของแท็บเล็ตที่อยู่ Wi-Fi เดียวกัน
-3. กด **Share → Add to Home Screen** เพื่อติดตั้งเป็นแอป (PWA) แบบเต็มจอ
-
-### แก้ปัญหาที่พบบ่อย (Troubleshooting)
-
-| อาการ | สาเหตุ / วิธีแก้ |
-| --- | --- |
-| `npm warn allow-scripts … esbuild / fsevents` | npm ≥ 11.6 บล็อก install script ของ dependency โดยปริยาย — โปรเจกต์อนุมัติสองตัวนี้ไว้ใน `package.json` (`allowScripts`) แล้ว ถ้ายังเห็นคำเตือนก็ไม่มีผลต่อการทำงาน |
-| tests ล้มเหลวเรื่อง `localStorage` (Node ≥ 25) | Node 25+ มี global `localStorage` ของตัวเองซึ่งเป็น `undefined` ถ้าไม่ใส่ `--localstorage-file` — test setup ของโปรเจกต์ผูก Storage ของ jsdom ให้เองแล้ว (แก้แล้ว) และ `setup-mac.sh` จะไม่หยุดทำงานเพราะ test อีกต่อไป |
-| พอร์ต 5173 ถูกใช้อยู่ | Vite จะเลื่อนไปพอร์ตถัดไปเองและพิมพ์ URL ใหม่ใน Terminal |
-| iPad/Android เปิดได้แต่ไฟล์หายหลังปิดแท็บ | OPFS ต้องการ secure context — รันด้วย `AIVEP_HTTPS=1 bash setup-mac.sh` (หรือ `npm run dev:https`) แล้วยอมรับใบรับรอง self-signed บนแท็บเล็ต |
-| ต้องการรันโดยไม่ตรวจสอบ | `AIVEP_SKIP_CHECKS=1 bash setup-mac.sh` ข้าม typecheck/tests เพื่อเปิดโปรแกรมทันที |
+1. **ลำดับความสำคัญของ `AIVEP_DIR`**: ตัวแปร `AIVEP_DIR` มีสิทธิ์สูงสุดเหนือโฟลเดอร์ปัจจุบันเสมอ แม้จะรันจากใน checkout อื่น
+2. **การจำพาสล่าสุด**: สคริปต์จะจำพาสที่เคยใช้ไว้ใน `~/.config/aivep/last_dir` ทำให้รัน `curl ... | bash` ซ้ำแล้วกลับมาที่เดิมได้เสมอ
+3. **การตรวจสอบ External Drive / APFS**: ตรวจสอบว่าไดรฟ์ `/Volumes/...` ถูก mount อยู่หรือไม่ และตรวจว่าเป็นระบบไฟล์ APFS / Apple HFS+ หรือไม่ พร้อมแจ้งเตือนหากเป็น ExFAT/NTFS
 
 ---
 
@@ -64,13 +53,16 @@ npm run build        # production build + PWA service worker → dist/
 
 | หมวด | รายละเอียด |
 | --- | --- |
-| **Media** | Import วิดีโอ / เสียง / รูป (ปุ่ม, ลากวาง, หรือ drop ลง timeline) · thumbnail · waveform · เก็บไฟล์ไว้ในเครื่องด้วย OPFS (กลับมาเปิดต่อได้หลังปิดแท็บ) |
-| **Timeline** | หลายแทร็ก (V1, V2… / A1…) · ลากย้าย · ย้ายข้ามแทร็ก · ตัดขอบ (trim) แม่นยำระดับเฟรม · Split (blade) · Ripple delete · Duplicate · Magnetic snapping (ขอบคลิป / playhead) · ซูมด้วยล้อเมาส์ ⌘+scroll หรือ pinch สองนิ้ว · lock / mute / hide แทร็ก |
-| **Preview** | Canvas compositor 60 fps · นาฬิกาแบบ monotonic (เฟรมไม่เพี้ยนตามความหนักของการวาด) · เสียงผ่าน Web Audio (volume ต่อคลิป, ทำงานบน iOS) |
-| **Inspector** | Speed (0.1–8×) · Fade in/out · Volume / Mute · Position / Scale / Rotation / Opacity · Text (ฟอนต์, สี, พื้นหลัง, จัดวาง) · Effects: Brightness, Contrast, Saturation, B&W, Sepia, Hue, Blur, Invert |
-| **Titles** | คลิปข้อความหลายบรรทัดวาดตรงบน canvas (กด **T**) |
-| **History** | Undo / Redo ไม่จำกัดชั้น (200 ขั้น) — การลาก 1 ครั้ง = undo 1 ครั้ง (transaction) |
-| **Export** | เรนเดอร์เป็นไฟล์ MP4 (Safari) / WebM (Chrome, Edge, Firefox) ที่ความละเอียดโปรเจกต์ (สูงสุด 1920 px) พร้อมเสียงมิกซ์ |
+| **AI Smart Cut** | **Auto Cut Silence (ตัดช่วงเงียบอัตโนมัติ)**: ตรวจจับเสียงเงียบ/ช่องว่างการพูด (RMS energy / dB threshold) พร้อม **Auto-Detect Noise Level** ค้นหาระดับเสียงรบกวนอัตโนมัติ, waveform แสดงโซนเขียว/แดงแบบ interactive, ปรับ threshold / min silence / speech padding ได้อิสระ, รองรับ 3 โหมด: Jump Cut & Ripple Delete (ตัดและต่อให้ทันที), Split (ตัดแบ่งคลิป), Mute (ปิดเสียงเฉพาะช่วงเงียบ) |
+| **AI Subtitles & Karaoke** | **Auto Subtitles with Whisper (ซับไตเติ้ล AI & คาราโอเกะ)**: ถอดเสียงเป็นคำบรรยายอัตโนมัติด้วย Whisper AI (In-Browser Transformers.js 100% Client-side ออฟไลน์, Web Speech Engine, หรือ Whisper Cloud API / Groq), **Word-by-Word Karaoke Highlight** สไตล์ TikTok Pop, สไตล์พรีเซ็ตหลากหลาย, **1-Click แปลงซับไตเติลเป็น AI Voiceover**, วางลงแทร็ก Subtitles อัตโนมัติ, พร้อม Import/Export `.srt` และ `.vtt` |
+| **AI Scene Splitter** | **Scene & Shot Detection (ตรวจจับและตัดแบ่งฉาก)**: วิเคราะห์ Color Histogram & Luminance Deltas ข้ามเฟรมวิดีโอ เพื่อตรวจจับจุดเปลี่ยนมุมกล้อง/คัตฉากอัตโนมัติ พร้อม Thumbnail Strip และตัดแบ่งคลิปบน Timeline ได้ในคลิกเดียว |
+| **AI Voiceover** | **Text-to-Speech Voiceover (พากย์เสียง AI)**: สร้างเสียงพากย์ภาษาไทย/อังกฤษ/ทั่วโลก ด้วย Web Speech Synthesis หรือ OpenAI HD Voices (Alloy, Echo, Nova, Onyx) พร้อมวางลงแทร็กเสียง A1/A2 และสร้าง Waveform ให้อัตโนมัติ |
+| **AI Smart Reframe** | **16:9 ↔ 9:16 Aspect Ratio Converter**: แปลงวิดีโอแนวนอนเป็นแนวตั้งสำหรับ TikTok, Reels, Shorts พร้อม AI Auto-Detect Subject โฟกัสวัตถุหลักอัตโนมัติ, 3 สไตล์: Auto-Crop, Blurred Background (โคลนวิดีโอเบลอเป็นฉากหลัง), และ Fit Letterbox |
+| **Audio Ops** | **Extract Audio & Auto Ducking**: แยกแทร็กเสียงจากวิดีโอ (Extract Audio to A1) ใน 1 คลิก, Auto Audio Ducking ลดเสียงดนตรีพื้นหลังอัตโนมัติเมื่อมีเสียงบรรยาย |
+| **Transitions** | **Video Transitions**: เอฟเฟกต์เปลี่ยนฉากระดับโปร (Cross Dissolve, Dip to Black, Dip to White, Wipe Left, Wipe Right, Slide Left, Zoom In) พร้อม visual badges บนคลิปไทม์ไลน์และตัวปรับความยาว Transition In / Transition Out ใน Inspector |
+| **Media & Timeline** | หลายแทร็ก (V1, V2… / A1…) · ลากย้าย · ย้ายข้ามแทร็ก · ตัดขอบ (trim) แม่นยำระดับเฟรม · Split (blade) · Ripple delete · Duplicate · Magnetic snapping · ซูม timeline · lock / mute / hide แทร็ก · OPFS Storage |
+| **Preview & Effects** | Canvas compositor 60 fps · Speed (0.1–8×) · Fade in/out · Volume / Mute · Position / Scale / Rotation / Opacity · Text Titles (กด **T**) · Effects: Brightness, Contrast, Saturation, B&W, Sepia, Hue, Blur, Invert |
+| **Fast Export & GIF** | **Fast Offline Render (WebCodecs)**: เรนเดอร์ไฟล์ MP4 / WebM ความเร็วสูงระดับฮาร์ดแวร์, Social Media Presets (TikTok, Reels, YouTube 1080p, Instagram Square), **Animated GIF Export** ส่งออกแอนิเมชัน GIF สำหรับมีมและสติกเกอร์ |
 | **Cross-platform** | Responsive: Desktop = 3 คอลัมน์ + timeline เต็มจอ · Tablet/Mobile = แท็บ Media / Timeline / Edit ปุ่มขนาด ≥ 44 px · PWA ติดตั้งได้ ทำงานออฟไลน์ |
 
 ### คีย์ลัด (Desktop)
@@ -88,30 +80,39 @@ npm run build        # production build + PWA service worker → dist/
 | `=` / `-` · `⌘ + wheel` | ซูม timeline |
 | `N` · `T` · `Esc` | สลับ snapping · เพิ่ม Title · ยกเลิกการเลือก |
 
-### ท่าทางสัมผัส (iPad / Android)
-
-- ลาก 1 นิ้วบนพื้นที่ว่าง = เลื่อน timeline · แตะ = ย้าย playhead
-- ถ่าง/หุบ 2 นิ้ว = ซูม timeline (ยึดตำแหน่งนิ้ว)
-- ลากคลิป = ย้าย · ลากขอบ (22 px) = trim · ลากขึ้น/ลง = ย้ายแทร็ก
-
 ---
 
 ## สถาปัตยกรรม (Architecture)
 
 ```
 src/
-├── core/        ← โมเดลข้อมูล + ตรรกะล้วน (ไม่แตะ DOM, มี unit test ครบ)
-│   ├── types.ts          Project / Track / Clip / Effect / MediaAsset (หน่วยเวลาเป็นเฟรมจำนวนเต็ม)
-│   ├── timelineOps.ts    add / move / trim / split / ripple / speed / fps — pure functions + invariants
+├── core/        ← โมเดลข้อมูล + ตรรกะล้วน (ไม่แตะ DOM, มี unit test ครบ 105 tests)
+│   ├── types.ts          Project / Track / Clip / Transition / Effect / MediaAsset
+│   ├── timelineOps.ts    add / move / trim / split / ripple / speed / fps
+│   ├── silence.ts        RMS energy detection, dB thresholds, padding algorithms
+│   ├── silenceOps.ts     pure silence cut, jump cut & ripple delete operations
+│   ├── subtitles.ts      SubtitleSegment model, SRT/VTT parser & serializer, style presets
+│   ├── subtitleOps.ts    apply subtitles to timeline, track allocation, formatting
+│   ├── scene.ts          color histogram comparison, shot change score thresholding
+│   ├── sceneOps.ts       split clip into detected scene clips
+│   ├── reframe.ts        aspect ratio conversion math, center-of-interest focus
+│   ├── reframeOps.ts     auto-crop transform & blurred background track generation
+│   ├── transitions.ts    transition definitions (crossfade, dip, wipe, slide, zoom)
+│   ├── tts.ts            voice options & speech synthesis parameters
 │   ├── snapping.ts       magnetic snapping
-│   ├── effects.ts        CSS-filter builder + software fallback (pixel-exact colour matrices)
+│   ├── effects.ts        CSS-filter builder + software fallback
 │   ├── time.ts           timecode / frame conversion
 │   ├── project.ts        factories & defaults
 │   └── store.ts          Zustand store · undo/redo · transactions
 ├── engine/      ← Media engine (browser APIs)
+│   ├── silenceDetector.ts decode audio samples, mono downsampling, silence analysis
+│   ├── transcriber.ts     Whisper AI (Transformers.js), Web Speech API, Cloud Whisper API
+│   ├── sceneDetector.ts   video frame canvas sampling & histogram difference analysis
+│   ├── tts.ts             speech synthesis engine (Browser SpeechSynthesis + OpenAI TTS)
+│   ├── fastExporter.ts    hardware-accelerated WebCodecs / fast offline exporter
 │   ├── sources.ts        FrameSource interface + <video>/<audio>/<img> sources + SourcePool
-│   ├── compositor.ts     วาดเฟรมลง canvas (transform, opacity, fades, effects, text)
-│   ├── playback.ts       PlaybackEngine: rAF loop, monotonic clock, A/V sync, render targets
+│   ├── compositor.ts     canvas frame rendering (transforms, effects, transitions, text)
+│   ├── playback.ts       PlaybackEngine: rAF loop, monotonic clock, A/V sync
 │   ├── audioMixer.ts     Web Audio graph (gain ต่อคลิป, capture สำหรับ export)
 │   ├── probe.ts          duration / dimensions / thumbnail
 │   ├── waveform.ts       peak analysis (OfflineAudioContext)
@@ -119,57 +120,19 @@ src/
 │   ├── persistence.ts    session save/restore
 │   ├── importer.ts       import pipeline
 │   └── exporter.ts       MediaRecorder real-time export
-└── ui/          ← React 19 + Tailwind v4 (Pointer Events → เมาส์ / นิ้ว / Apple Pencil ใช้โค้ดเดียวกัน)
-    ├── layout/EditorLayout.tsx     Desktop 3-column ↔ Tablet tabbed
-    ├── timeline/                   Timeline, ruler (canvas), clips, headers, toolbar, gestures
-    ├── preview/PreviewPlayer.tsx   canvas + transport
-    ├── inspector/Inspector.tsx     project & clip properties, effects
-    ├── media/MediaLibrary.tsx      import + library
-    ├── toolbar/                    top bar, export dialog
-    └── hooks/                      shortcuts, persistence, media queries
-tests/           ← Vitest: 65 core tests + 7 full-app smoke tests (jsdom, pointer-drag จำลอง)
-```
-
-### หลักการออกแบบที่ทำให้ "เป๊ะ"
-
-1. **Integer frames everywhere** — ตำแหน่ง/ความยาวคลิปเป็นจำนวนเต็มของเฟรม ไม่มี floating-point drift; แปลงเป็นวินาทีเฉพาะตอนเรนเดอร์
-2. **Pure operations + invariants** — ทุกการแก้ไข timeline เป็น pure function ที่รับประกันว่า: คลิปในแทร็กเดียวกันไม่ทับกัน, ไม่ยาวเกินไฟล์ต้นฉบับ, ไม่แตะแทร็กที่ล็อก, คืน reference เดิมเมื่อไม่มีอะไรเปลี่ยน (undo history จึงถูกและถูกจัดเก็บแบบ structural sharing)
-3. **Engine ไม่ผูกกับ React** — `PlaybackEngine` อ่าน/เขียน store โดยตรง, UI เป็นแค่ view; export ใช้ engine ตัวเดียวกันวาดลง canvas อีกใบ
-4. **Feature detection ทุกจุด** — OPFS, `ctx.filter`, Web Audio, MediaRecorder ล้วนมี fallback
-
-### Data model (ย่อ)
-
-```ts
-interface Clip {
-  id: string; trackId: string; kind: 'video' | 'audio' | 'image' | 'text'; assetId: string | null;
-  start: Frames; duration: Frames; offset: Frames;   // integer frames @ project.fps
-  speed: number; volume: number; muted: boolean; fadeIn: Frames; fadeOut: Frames;
-  transform: { x; y; scale; rotation; opacity }; effects: Effect[]; text: TextStyle | null;
-}
+└── ui/          ← React 19 + Tailwind v4
+    ├── ai/               SilenceRemovalModal, SubtitleGeneratorModal, SceneDetectionModal, VoiceoverModal, SmartReframeModal
+    ├── layout/           EditorLayout.tsx (Desktop 3-column ↔ Tablet tabbed)
+    ├── timeline/         Timeline, ruler, clips, headers, toolbar, gestures
+    ├── preview/          PreviewPlayer.tsx
+    ├── inspector/        Inspector.tsx (clip timing, transitions, effects, AI quick tools)
+    ├── media/            MediaLibrary.tsx
+    ├── toolbar/          TopBar.tsx, ExportDialog.tsx
+    └── hooks/            shortcuts, persistence, media queries
+tests/           ← Vitest: 97 core/AI tests + 8 full-app smoke tests
 ```
 
 ---
-
-## Browser support
-
-| แพลตฟอร์ม | เบราว์เซอร์ | หมายเหตุ |
-| --- | --- | --- |
-| macOS / Windows / Linux | Chrome, Edge ≥ 108 · Firefox ≥ 111 · Safari ≥ 16.4 | ครบทุกฟีเจอร์ |
-| iPadOS / iOS | Safari ≥ 16.4 (แนะนำ 17+) | Export เป็น MP4; OPFS ต้องเปิดผ่าน https หรือ localhost |
-| Android | Chrome ≥ 108 | Export เป็น WebM |
-
-ข้อจำกัดปัจจุบัน: การ export ใช้เวลาเท่าความยาววิดีโอ (real-time capture) และไม่ควรสลับแท็บระหว่างเรนเดอร์
-
----
-
-## Roadmap
-
-- [ ] WebCodecs `VideoDecoder` + MP4 demuxer เป็น `FrameSource` แบบ frame-exact (interface พร้อมแล้ว)
-- [ ] Offline export ด้วย WebCodecs `VideoEncoder` + mp4 muxer (เร็วกว่า real-time, ไฟล์ MP4 ทุกเบราว์เซอร์)
-- [ ] Transitions ระหว่างคลิป (cross dissolve, wipe) และ keyframe animation
-- [ ] WebGPU / WebGL effect pipeline (LUT, colour wheels)
-- [ ] Linked audio track เมื่อวางวิดีโอ (แยกเสียงไป A1 อัตโนมัติ)
-- [ ] Cloud project sync (Supabase) สำหรับสลับเครื่อง Mac ↔ iPad
 
 ## License
 

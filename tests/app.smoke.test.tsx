@@ -171,4 +171,33 @@ describe('application smoke test (desktop layout)', () => {
     expect(saved.assets[0].id).toBe('asset1');
     expect(saved.assets[0].url).toBeUndefined();
   });
+
+  it('opens and interacts with AI Auto Cut Silence and Subtitles modals', async () => {
+    await mountApp();
+    act(() => {
+      seedAsset();
+      useEditorStore.getState().addClipFromAsset('asset1');
+    });
+
+    // Open Silence Removal Modal
+    const cutSilenceBtn = screen.getByTitle(/AI Auto Cut Silence/i);
+    fireEvent.click(cutSilenceBtn);
+    expect(screen.getByText(/AI Auto Cut Silence/i)).toBeTruthy();
+    expect(screen.getByText(/Detection Sensitivity/i)).toBeTruthy();
+
+    // Close modal
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(screen.queryByText(/Detection Sensitivity/i)).toBeNull();
+
+    // Open Subtitles Modal
+    const subtitlesBtn = screen.getByTitle(/AI Auto Subtitles/i);
+    fireEvent.click(subtitlesBtn);
+    expect(screen.getByText(/AI Subtitles & Captions/i)).toBeTruthy();
+    expect(screen.getByText('Auto Transcribe')).toBeTruthy();
+    expect(screen.getByText(/Style & Presets/i)).toBeTruthy();
+
+    // Close modal
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(screen.queryByText(/Style & Presets/i)).toBeNull();
+  });
 });

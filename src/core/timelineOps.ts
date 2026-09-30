@@ -319,7 +319,7 @@ export function duplicateClip(project: Project, clipId: string, newId: string): 
 }
 
 export type ClipPatch = Partial<
-  Pick<Clip, 'name' | 'volume' | 'muted' | 'fadeIn' | 'fadeOut' | 'transform' | 'effects' | 'text'>
+  Pick<Clip, 'name' | 'volume' | 'muted' | 'fadeIn' | 'fadeOut' | 'transform' | 'effects' | 'text' | 'transitionIn' | 'transitionOut' | 'keyframes'>
 >;
 
 /** Patch non-structural clip properties (timing is handled by dedicated operations). */
