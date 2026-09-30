@@ -1,5 +1,5 @@
 /**
- * Compositor: paints one timeline frame onto a 2D canvas.
+ * Compositor: paints one timeline frame onto a 2D canvas with transforms, effects, text, and transitions.
  *
  * Video tracks are painted bottom-up (last video track in `project.tracks` first) so that upper
  * tracks overlay lower ones. Transforms are expressed in project pixels; the canvas may be any
@@ -7,6 +7,7 @@
  */
 
 import { applyPixelEffects, buildCanvasFilter, needsPixelFallback } from '../core/effects';
+import { resolveClipTransform } from '../core/keyframes';
 import { activeClipOnTrack, fadeFactor } from '../core/timelineOps';
 import type { Clip, Frames, MediaAsset, Project, TextStyle } from '../core/types';
 import type { FrameSource } from './sources';
@@ -59,17 +60,71 @@ export class Compositor {
       if (alpha <= 0) continue;
 
       if (clip.kind === 'text') {
-        if (clip.text) this.drawText(ctx, project, clip, clip.text, alpha);
+        if (clip.text) this.drawText(ctx, project, clip, clip.text, alpha, frame);
       } else {
-        this.drawMedia(ctx, project, clip, alpha, input.resolveSource(clip), scaleX);
+        this.drawMedia(ctx, project, clip, alpha, input.resolveSource(clip), scaleX, frame);
       }
     }
     ctx.restore();
   }
 
-  private applyClipTransform(ctx: CanvasRenderingContext2D, project: Project, clip: Clip, alpha: number): void {
-    const t = clip.transform;
-    ctx.globalAlpha = alpha;
+  private applyClipTransform(
+    ctx: CanvasRenderingContext2D,
+    project: Project,
+    clip: Clip,
+    alpha: number,
+    frame: Frames,
+  ): void {
+    const localFrame = frame - clip.start;
+    const remainingFrames = clip.duration - localFrame;
+    const t = { ...resolveClipTransform(clip.transform, clip.keyframes, localFrame) };
+    let effectiveAlpha = alpha * t.opacity;
+
+    // Transition In
+    if (clip.transitionIn && clip.transitionIn.type !== 'none') {
+      const dur = Math.max(1, clip.transitionIn.duration);
+      if (localFrame < dur) {
+        const p = localFrame / dur;
+        switch (clip.transitionIn.type) {
+          case 'crossfade':
+            effectiveAlpha *= p;
+            break;
+          case 'fadeToBlack':
+            effectiveAlpha *= Math.max(0, (p - 0.3) / 0.7);
+            break;
+          case 'slideLeft':
+            t.x += (1 - p) * project.width;
+            break;
+          case 'zoomIn':
+            t.scale *= 0.6 + 0.4 * p;
+            break;
+        }
+      }
+    }
+
+    // Transition Out
+    if (clip.transitionOut && clip.transitionOut.type !== 'none') {
+      const dur = Math.max(1, clip.transitionOut.duration);
+      if (remainingFrames < dur) {
+        const p = remainingFrames / dur;
+        switch (clip.transitionOut.type) {
+          case 'crossfade':
+            effectiveAlpha *= p;
+            break;
+          case 'fadeToBlack':
+            effectiveAlpha *= Math.max(0, (p - 0.3) / 0.7);
+            break;
+          case 'slideLeft':
+            t.x -= (1 - p) * project.width;
+            break;
+          case 'zoomIn':
+            t.scale *= 1 + 0.4 * (1 - p);
+            break;
+        }
+      }
+    }
+
+    ctx.globalAlpha = Math.max(0, Math.min(1, effectiveAlpha));
     ctx.translate(project.width / 2 + t.x, project.height / 2 + t.y);
     ctx.rotate((t.rotation * Math.PI) / 180);
     ctx.scale(t.scale, t.scale);
@@ -82,6 +137,7 @@ export class Compositor {
     alpha: number,
     source: FrameSource | null,
     pixelScale: number,
+    frame: Frames,
   ): void {
     if (!source || !source.ready()) return;
     const image = source.image();
@@ -96,7 +152,23 @@ export class Compositor {
     const h = nh * fit;
 
     ctx.save();
-    this.applyClipTransform(ctx, project, clip, alpha);
+    this.applyClipTransform(ctx, project, clip, alpha, frame);
+
+    // Apply wipe clipping if active
+    const localFrame = frame - clip.start;
+    if (clip.transitionIn && (clip.transitionIn.type === 'wipeLeft' || clip.transitionIn.type === 'wipeRight')) {
+      const dur = Math.max(1, clip.transitionIn.duration);
+      if (localFrame < dur) {
+        const p = localFrame / dur;
+        ctx.beginPath();
+        if (clip.transitionIn.type === 'wipeRight') {
+          ctx.rect(-w / 2, -h / 2, w * p, h);
+        } else {
+          ctx.rect(-w / 2 + w * (1 - p), -h / 2, w * p, h);
+        }
+        ctx.clip();
+      }
+    }
 
     let drawable: CanvasImageSource = image;
     const filter = buildCanvasFilter(clip.effects);
@@ -146,13 +218,20 @@ export class Compositor {
     }
   }
 
-  private drawText(ctx: CanvasRenderingContext2D, project: Project, clip: Clip, style: TextStyle, alpha: number): void {
+  private drawText(
+    ctx: CanvasRenderingContext2D,
+    project: Project,
+    clip: Clip,
+    style: TextStyle,
+    alpha: number,
+    frame: Frames,
+  ): void {
     const lines = style.content.split('\n');
     const lineHeight = style.fontSize * 1.2;
     const blockHeight = lines.length * lineHeight;
 
     ctx.save();
-    this.applyClipTransform(ctx, project, clip, alpha);
+    this.applyClipTransform(ctx, project, clip, alpha, frame);
     ctx.font = `${style.italic ? 'italic ' : ''}${style.bold ? '700' : '400'} ${style.fontSize}px ${style.fontFamily}`;
     ctx.textBaseline = 'middle';
     ctx.textAlign = style.align;

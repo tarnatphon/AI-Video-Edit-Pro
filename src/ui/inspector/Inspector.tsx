@@ -1,9 +1,37 @@
-import { AlignCenter, AlignLeft, AlignRight, Plus, Trash2 } from 'lucide-react';
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Crop,
+  Diamond,
+  FastForward,
+  Film,
+  MessageSquare,
+  Mic,
+  MoveRight,
+  Music,
+  Palette,
+  Plus,
+  Scissors,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
+import { useState } from 'react';
+import { extractAudioFromClip } from '../../core/audioOps';
+import { COLOR_LUT_PRESETS, type ColorLutPreset } from '../../core/colorLut';
 import { EFFECT_DEFINITIONS } from '../../core/effects';
+import { setKeyframeOnClip } from '../../core/keyframes';
 import { selectPrimaryClip, useEditorStore } from '../../core/store';
+import { SpeedRampModal } from '../ai/SpeedRampModal';
 import { formatTimecode } from '../../core/time';
 import { clipEnd, MAX_SPEED, MIN_SPEED, type ClipPatch } from '../../core/timelineOps';
+import { TRANSITION_DEFINITIONS, TRANSITION_TYPES, type TransitionType } from '../../core/transitions';
 import { DEFAULT_TRANSFORM, EFFECT_TYPES, RESOLUTION_PRESETS, SUPPORTED_FPS, type Clip, type EffectType } from '../../core/types';
+import { SceneDetectionModal } from '../ai/SceneDetectionModal';
+import { SilenceRemovalModal } from '../ai/SilenceRemovalModal';
+import { SmartReframeModal } from '../ai/SmartReframeModal';
+import { SubtitleGeneratorModal } from '../ai/SubtitleGeneratorModal';
+import { VoiceoverModal } from '../ai/VoiceoverModal';
 import { IconButton, Section, SliderField, TextButton, ToggleRow } from '../shared/controls';
 
 export function Inspector() {
@@ -28,6 +56,9 @@ function ProjectInspector() {
   const clipCount = project.clips.length;
   const store = useEditorStore.getState;
   const presetId = RESOLUTION_PRESETS.find((p) => p.width === project.width && p.height === project.height)?.id ?? 'custom';
+
+  const [reframeModalOpen, setReframeModalOpen] = useState(false);
+  const [voiceoverModalOpen, setVoiceoverModalOpen] = useState(false);
 
   return (
     <>
@@ -82,6 +113,35 @@ function ProjectInspector() {
           timing, transform, audio and effects.
         </p>
       </Section>
+
+      <Section title="AI Smart Tools">
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setReframeModalOpen(true)}
+            className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-200 transition-colors hover:bg-amber-500/20"
+          >
+            <span className="flex items-center gap-2">
+              <Crop size={14} className="text-amber-400" />
+              AI Smart Reframe (16:9 ↔ 9:16)
+            </span>
+            <Sparkles size={12} className="text-amber-400" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setVoiceoverModalOpen(true)}
+            className="flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs text-emerald-200 transition-colors hover:bg-emerald-500/20"
+          >
+            <span className="flex items-center gap-2">
+              <Mic size={14} className="text-emerald-400" />
+              AI Voiceover (Text-to-Speech)
+            </span>
+            <Sparkles size={12} className="text-emerald-400" />
+          </button>
+        </div>
+      </Section>
+
       <Section title="Shortcuts">
         <ul className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px] text-neutral-400">
           <Key k="Space" d="Play / pause" />
@@ -95,6 +155,9 @@ function ProjectInspector() {
           <Key k="T" d="Add title" />
         </ul>
       </Section>
+
+      {reframeModalOpen && <SmartReframeModal onClose={() => setReframeModalOpen(false)} />}
+      {voiceoverModalOpen && <VoiceoverModal onClose={() => setVoiceoverModalOpen(false)} />}
     </>
   );
 }
@@ -117,7 +180,13 @@ function ClipInspector({ clip }: { clip: Clip }) {
   const store = useEditorStore.getState;
   const update = (patch: ClipPatch): void => store().updateClip(clip.id, patch);
 
+  const [silenceModalOpen, setSilenceModalOpen] = useState(false);
+  const [subtitlesModalOpen, setSubtitlesModalOpen] = useState(false);
+  const [sceneModalOpen, setSceneModalOpen] = useState(false);
+  const [speedRampModalOpen, setSpeedRampModalOpen] = useState(false);
+
   const isVisual = clip.kind !== 'audio';
+  const isVideo = clip.kind === 'video';
   const hasAudio = clip.kind === 'audio' || clip.kind === 'video';
   const t = clip.transform;
 
@@ -130,16 +199,28 @@ function ClipInspector({ clip }: { clip: Clip }) {
           <Stat label="Length" value={formatTimecode(clip.duration, fps)} />
         </div>
         {clip.kind !== 'text' && clip.kind !== 'image' && (
-          <SliderField
-            label="Speed"
-            value={clip.speed}
-            min={MIN_SPEED}
-            max={MAX_SPEED}
-            step={0.05}
-            unit="×"
-            onChange={(v) => store().setClipSpeed(clip.id, v)}
-            onReset={clip.speed !== 1 ? () => store().setClipSpeed(clip.id, 1) : undefined}
-          />
+          <>
+            <SliderField
+              label="Speed"
+              value={clip.speed}
+              min={MIN_SPEED}
+              max={MAX_SPEED}
+              step={0.05}
+              unit="×"
+              onChange={(v) => store().setClipSpeed(clip.id, v)}
+              onReset={clip.speed !== 1 ? () => store().setClipSpeed(clip.id, 1) : undefined}
+            />
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setSpeedRampModalOpen(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-cyan-500/30 bg-cyan-500/10 py-1.5 text-xs text-cyan-200 transition-colors hover:bg-cyan-500/20"
+              >
+                <FastForward size={13} className="text-cyan-400" />
+                Speed Ramp Curve (เร่ง-ชะลอสปีด)
+              </button>
+            </div>
+          </>
         )}
         <SliderField
           label="Fade in"
@@ -161,10 +242,170 @@ function ClipInspector({ clip }: { clip: Clip }) {
         />
       </Section>
 
+      {/* Transitions Section */}
+      {isVisual && (
+        <Section title="Transitions">
+          <div className="space-y-3">
+            <div className="flex flex-col gap-1 text-xs text-neutral-300">
+              <span className="flex items-center gap-1.5 font-medium">
+                <MoveRight size={13} className="text-accent" /> Transition In
+              </span>
+              <select
+                value={clip.transitionIn?.type ?? 'none'}
+                onChange={(e) => {
+                  const type = e.target.value as TransitionType;
+                  update({
+                    transitionIn:
+                      type === 'none'
+                        ? undefined
+                        : { type, duration: clip.transitionIn?.duration || Math.round(fps * 0.5) },
+                  });
+                }}
+                className="h-8 rounded-md border border-line bg-neutral-900 px-2 text-xs text-neutral-100 outline-none focus:border-accent"
+              >
+                {TRANSITION_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {TRANSITION_DEFINITIONS[type].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {clip.transitionIn && clip.transitionIn.type !== 'none' && (
+              <SliderField
+                label="In Duration"
+                value={(clip.transitionIn.duration || 15) / fps}
+                min={0.1}
+                max={Math.max(0.2, (clip.duration / fps) * 0.5)}
+                step={0.05}
+                unit="s"
+                onChange={(v) =>
+                  update({
+                    transitionIn: {
+                      type: clip.transitionIn!.type,
+                      duration: Math.round(v * fps),
+                    },
+                  })
+                }
+              />
+            )}
+
+            <div className="flex flex-col gap-1 text-xs text-neutral-300">
+              <span className="flex items-center gap-1.5 font-medium">
+                <MoveRight size={13} className="text-accent" /> Transition Out
+              </span>
+              <select
+                value={clip.transitionOut?.type ?? 'none'}
+                onChange={(e) => {
+                  const type = e.target.value as TransitionType;
+                  update({
+                    transitionOut:
+                      type === 'none'
+                        ? undefined
+                        : { type, duration: clip.transitionOut?.duration || Math.round(fps * 0.5) },
+                  });
+                }}
+                className="h-8 rounded-md border border-line bg-neutral-900 px-2 text-xs text-neutral-100 outline-none focus:border-accent"
+              >
+                {TRANSITION_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {TRANSITION_DEFINITIONS[type].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {clip.transitionOut && clip.transitionOut.type !== 'none' && (
+              <SliderField
+                label="Out Duration"
+                value={(clip.transitionOut.duration || 15) / fps}
+                min={0.1}
+                max={Math.max(0.2, (clip.duration / fps) * 0.5)}
+                step={0.05}
+                unit="s"
+                onChange={(v) =>
+                  update({
+                    transitionOut: {
+                      type: clip.transitionOut!.type,
+                      duration: Math.round(v * fps),
+                    },
+                  })
+                }
+              />
+            )}
+          </div>
+        </Section>
+      )}
+
+      {hasAudio && (
+        <Section title="AI Smart Tools">
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setSilenceModalOpen(true)}
+              className="flex items-center justify-between rounded-lg border border-purple-500/30 bg-purple-500/10 p-2.5 text-xs text-purple-200 transition-colors hover:bg-purple-500/20"
+            >
+              <span className="flex items-center gap-2">
+                <Scissors size={14} className="text-purple-400" />
+                Auto Cut Silence (ตัดช่วงเงียบ)
+              </span>
+              <Sparkles size={12} className="text-purple-400" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSubtitlesModalOpen(true)}
+              className="flex items-center justify-between rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2.5 text-xs text-indigo-200 transition-colors hover:bg-indigo-500/20"
+            >
+              <span className="flex items-center gap-2">
+                <MessageSquare size={14} className="text-indigo-400" />
+                Generate Subtitles (Whisper)
+              </span>
+              <Sparkles size={12} className="text-indigo-400" />
+            </button>
+
+            {isVideo && (
+              <button
+                type="button"
+                onClick={() => setSceneModalOpen(true)}
+                className="flex items-center justify-between rounded-lg border border-blue-500/30 bg-blue-500/10 p-2.5 text-xs text-blue-200 transition-colors hover:bg-blue-500/20"
+              >
+                <span className="flex items-center gap-2">
+                  <Film size={14} className="text-blue-400" />
+                  Scene &amp; Shot Splitter (แยกฉาก)
+                </span>
+                <Sparkles size={12} className="text-blue-400" />
+              </button>
+            )}
+          </div>
+        </Section>
+      )}
+
       {hasAudio && (
         <Section title="Audio">
           <SliderField label="Volume" value={clip.volume} min={0} max={2} step={0.01} unit="×" onChange={(v) => update({ volume: v })} onReset={clip.volume !== 1 ? () => update({ volume: 1 }) : undefined} />
           <ToggleRow label="Mute" checked={clip.muted} onChange={(v) => update({ muted: v })} />
+
+          {clip.kind === 'video' && clip.assetId && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const state = useEditorStore.getState();
+                  state.beginTransaction();
+                  const { project: nextProj, audioClipId } = extractAudioFromClip(state.project, state.assets, clip.id);
+                  if (audioClipId) {
+                    useEditorStore.setState({ project: nextProj, selectedClipIds: [audioClipId] });
+                  }
+                  state.endTransaction();
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-line bg-neutral-900 py-1.5 text-xs text-neutral-200 hover:border-accent hover:text-white"
+              >
+                <Music size={13} className="text-accent" />
+                Extract Audio to A1 (แยกแทร็กเสียง)
+              </button>
+            </div>
+          )}
         </Section>
       )}
 
@@ -172,9 +413,40 @@ function ClipInspector({ clip }: { clip: Clip }) {
         <Section
           title="Transform"
           action={
-            <button type="button" onClick={() => update({ transform: { ...DEFAULT_TRANSFORM } })} className="text-[11px] text-neutral-400 hover:text-white">
-              Reset
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const playhead = useEditorStore.getState().playhead;
+                  const currentClipFrame = Math.max(0, playhead - clip.start);
+                  const hasKeyframe = clip.keyframes?.some((k) => k.frame === currentClipFrame);
+
+                  if (hasKeyframe) {
+                    const nextKf = clip.keyframes?.filter((k) => k.frame !== currentClipFrame);
+                    update({ keyframes: nextKf });
+                  } else {
+                    let nextKf = setKeyframeOnClip(clip.keyframes, currentClipFrame, 'x', t.x);
+                    nextKf = setKeyframeOnClip(nextKf, currentClipFrame, 'y', t.y);
+                    nextKf = setKeyframeOnClip(nextKf, currentClipFrame, 'scale', t.scale);
+                    nextKf = setKeyframeOnClip(nextKf, currentClipFrame, 'rotation', t.rotation);
+                    nextKf = setKeyframeOnClip(nextKf, currentClipFrame, 'opacity', t.opacity);
+                    update({ keyframes: nextKf });
+                  }
+                }}
+                className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${
+                  clip.keyframes && clip.keyframes.length > 0
+                    ? 'border border-amber-500/50 bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+                    : 'border border-line bg-neutral-900 text-neutral-400 hover:text-white'
+                }`}
+                title="Add/Remove Keyframe at current playhead"
+              >
+                <Diamond size={11} className={clip.keyframes && clip.keyframes.length > 0 ? 'fill-amber-400 text-amber-400' : ''} />
+                {clip.keyframes && clip.keyframes.length > 0 ? `${new Set(clip.keyframes.map((k) => k.frame)).size} Keyframes` : 'Add Keyframe'}
+              </button>
+              <button type="button" onClick={() => update({ transform: { ...DEFAULT_TRANSFORM }, keyframes: [] })} className="text-[11px] text-neutral-400 hover:text-white">
+                Reset
+              </button>
+            </div>
           }
         >
           <SliderField label="Position X" value={t.x} min={-2000} max={2000} step={1} unit="px" decimals={0} onChange={(v) => update({ transform: { ...t, x: v } })} />
@@ -199,6 +471,31 @@ function ClipInspector({ clip }: { clip: Clip }) {
           </TextButton>
         </div>
       </Section>
+
+      {silenceModalOpen && (
+        <SilenceRemovalModal
+          initialClipId={clip.id}
+          onClose={() => setSilenceModalOpen(false)}
+        />
+      )}
+      {subtitlesModalOpen && (
+        <SubtitleGeneratorModal
+          initialClipId={clip.id}
+          onClose={() => setSubtitlesModalOpen(false)}
+        />
+      )}
+      {sceneModalOpen && (
+        <SceneDetectionModal
+          initialClipId={clip.id}
+          onClose={() => setSceneModalOpen(false)}
+        />
+      )}
+      {speedRampModalOpen && (
+        <SpeedRampModal
+          initialClipId={clip.id}
+          onClose={() => setSpeedRampModalOpen(false)}
+        />
+      )}
     </>
   );
 }
@@ -268,6 +565,22 @@ function TextSection({ clip }: { clip: Clip }) {
 
 function EffectsSection({ clip }: { clip: Clip }) {
   const store = useEditorStore.getState;
+
+  const applyLut = (preset: ColorLutPreset) => {
+    store().beginTransaction();
+    // Remove existing basic color filters
+    for (const ef of clip.effects) {
+      if (['brightness', 'contrast', 'saturate', 'sepia', 'grayscale', 'hueRotate'].includes(ef.type)) {
+        store().removeEffect(clip.id, ef.id);
+      }
+    }
+    // Add preset effects
+    for (const fx of preset.effects) {
+      store().addEffect(clip.id, fx.type);
+    }
+    store().endTransaction();
+  };
+
   return (
     <Section
       title="Effects"
@@ -292,7 +605,34 @@ function EffectsSection({ clip }: { clip: Clip }) {
         </label>
       }
     >
-      {clip.effects.length === 0 && <p className="text-[11px] text-neutral-500">No effects yet. Try Brightness, Black &amp; White or Blur.</p>}
+      {/* 1-Click Color Grading LUT Presets */}
+      <div className="space-y-1.5 pb-2 border-b border-line">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-neutral-300">
+          <Palette size={13} className="text-accent" />
+          Cinematic Color LUTs (ย้อมสีฟิล์ม)
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {COLOR_LUT_PRESETS.map((lut) => (
+            <button
+              key={lut.id}
+              type="button"
+              onClick={() => applyLut(lut)}
+              className="flex flex-col items-center justify-center rounded-md border border-line bg-neutral-900/60 p-1.5 transition-colors hover:border-accent hover:bg-neutral-800"
+              title={lut.description}
+            >
+              <div
+                className="h-3.5 w-full rounded-sm"
+                style={{ background: lut.previewGradient }}
+              />
+              <span className="mt-1 truncate text-[10px] text-neutral-300 font-medium">
+                {lut.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {clip.effects.length === 0 && <p className="text-[11px] text-neutral-500 pt-1">No effects active. Pick a LUT preset or add individual filters.</p>}
       {clip.effects.map((effect) => {
         const def = EFFECT_DEFINITIONS[effect.type];
         return (
